@@ -50,13 +50,13 @@ jobs:
       gnu_metadata: ${{ steps.matrix.outputs.gnu_metadata }}
       ref: ${{ steps.check.outputs.ref }}
     steps:
-      - name: Get version
+      - name: Determine ref
         id: check
         if: github.event_name == 'schedule'
         run: |
           ref="${REF}"
           if [[ -z "${ref}" ]]; then
-            ref="$(gh release view --repo dunglas/frankenphp --json tagName --jq '.tagName')"
+            ref="$(gh release view --repo php/frankenphp --json tagName --jq '.tagName')"
           fi
 
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
@@ -65,7 +65,7 @@ jobs:
           REF: ${{ (github.ref_type == 'tag' && github.ref_name) || (github.event_name == 'workflow_dispatch' && inputs.version) || '' }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ steps.check.outputs.ref && 'dunglas/frankenphp' || github.repository }}
+          repository: ${{ steps.check.outputs.ref && 'php/frankenphp' || github.repository }}
           ref: ${{ steps.check.outputs.ref }}
           persist-credentials: false
       - name: Set up Docker Buildx
@@ -113,9 +113,12 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ needs.prepare.outputs.ref && 'dunglas/frankenphp' || github.repository }}
+          repository: ${{ needs.prepare.outputs.ref && 'php/frankenphp' || github.repository }}
           ref: ${{ needs.prepare.outputs.ref }}
           persist-credentials: false
+      - name: Get source SHA
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
@@ -157,7 +160,7 @@ jobs:
             ${{ fromJson(needs.prepare.outputs.push) && '' || format('*.cache-to=type=gha,scope={0}-static-builder-musl{1}{2},ignore-error=true', needs.prepare.outputs.ref || github.ref, matrix.debug && '-debug' || '', matrix.mimalloc && '-mimalloc' || '') }}
             ${{ (fromJson(needs.prepare.outputs.push) && !matrix.debug && !matrix.mimalloc) && format('*.output=type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE_NAME) || '' }}
         env:
-          SHA: ${{ github.sha }}
+          SHA: ${{ steps.source.outputs.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - # Workaround for https://github.com/actions/runner/pull/2477#issuecomment-1501003600
         name: Export metadata
@@ -199,7 +202,7 @@ jobs:
           compression-level: 0
       - name: Upload assets
         if: fromJson(needs.prepare.outputs.push) && (needs.prepare.outputs.ref || github.ref_type == 'tag')
-        run: gh release upload "${REF}" frankenphp-linux-${{ matrix.platform == 'linux/amd64' && 'x86_64' || 'aarch64' }}${{ matrix.debug && '-debug' || '' }}${{ matrix.mimalloc && '-mimalloc' || '' }} --repo dunglas/frankenphp --clobber
+        run: gh release upload "${REF}" frankenphp-linux-${{ matrix.platform == 'linux/amd64' && 'x86_64' || 'aarch64' }}${{ matrix.debug && '-debug' || '' }}${{ matrix.mimalloc && '-mimalloc' || '' }} --repo php/frankenphp --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REF: ${{ (github.ref_type == 'tag' && github.ref_name) || needs.prepare.outputs.ref }}
@@ -269,9 +272,12 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ needs.prepare.outputs.ref && 'dunglas/frankenphp' || github.repository }}
+          repository: ${{ needs.prepare.outputs.ref && 'php/frankenphp' || github.repository }}
           ref: ${{ needs.prepare.outputs.ref }}
           persist-credentials: false
+      - name: Get source SHA
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
       - name: Set VERSION
         run: |
           if [ "${GITHUB_REF_TYPE}" == "tag" ]; then
@@ -311,7 +317,7 @@ jobs:
             ${{ fromJson(needs.prepare.outputs.push) && '' || format('*.cache-to=type=gha,scope={0}-static-builder-gnu,ignore-error=true', needs.prepare.outputs.ref || github.ref) }}
             ${{ fromJson(needs.prepare.outputs.push) && format('*.output=type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE_NAME) || '' }}
         env:
-          SHA: ${{ github.sha }}
+          SHA: ${{ steps.source.outputs.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - # Workaround for https://github.com/actions/runner/pull/2477#issuecomment-1501003600
         name: Export metadata
@@ -358,7 +364,7 @@ jobs:
           path: gh-output/*
       - name: Upload assets
         if: fromJson(needs.prepare.outputs.push) && (needs.prepare.outputs.ref || github.ref_type == 'tag')
-        run: gh release upload "${REF}" gh-output/* --repo dunglas/frankenphp --clobber
+        run: gh release upload "${REF}" gh-output/* --repo php/frankenphp --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REF: ${{ (github.ref_type == 'tag' && github.ref_name) || needs.prepare.outputs.ref }}
@@ -454,7 +460,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ${{ needs.prepare.outputs.ref && 'dunglas/frankenphp' || github.repository }}
+          repository: ${{ needs.prepare.outputs.ref && 'php/frankenphp' || github.repository }}
           ref: ${{ needs.prepare.outputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/setup-go

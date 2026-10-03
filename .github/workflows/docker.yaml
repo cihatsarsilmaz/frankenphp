@@ -38,8 +38,9 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     outputs:
-      # Push if it's a scheduled job, a tag, or if we're committing to the main branch
-      push: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.version) || startsWith(github.ref, 'refs/tags/') || (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')) && true || false }}
+      # Push if it's a scheduled job, a tag, or if we're committing to the main branch and DockerHub credentials are configured
+      push: ${{ (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.version) || startsWith(github.ref, 'refs/tags/') || (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')) && steps.dockerhub.outputs.available == 'true' && true || false }}
+      dockerhub_credentials_available: ${{ steps.dockerhub.outputs.available }}
       variants: ${{ steps.matrix.outputs.variants }}
       platforms: ${{ steps.matrix.outputs.platforms }}
       metadata: ${{ steps.matrix.outputs.metadata }}
@@ -61,11 +62,23 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Check DockerHub credentials
+        id: dockerhub
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -n "${DOCKERHUB_USERNAME}" && -n "${DOCKERHUB_TOKEN}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::DockerHub credentials are not configured; image publishing will be skipped."
+          fi
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Login to DockerHub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: steps.dockerhub.outputs.available == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }} # zizmor: ignore[secrets-outside-env] TODO: drop once super-linter ships zizmor >=1.24.0, then the allowlist in zizmor.yaml takes over
@@ -144,7 +157,7 @@ jobs:
           platforms: ${{ matrix.platform }}
       - name: Login to DockerHub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: needs.prepare.outputs.dockerhub_credentials_available == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }} # zizmor: ignore[secrets-outside-env] TODO: drop once super-linter ships zizmor >=1.24.0, then the allowlist in zizmor.yaml takes over
@@ -252,7 +265,7 @@ jobs:
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Login to DockerHub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: needs.prepare.outputs.dockerhub_credentials_available == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }} # zizmor: ignore[secrets-outside-env] TODO: drop once super-linter ships zizmor >=1.24.0, then the allowlist in zizmor.yaml takes over

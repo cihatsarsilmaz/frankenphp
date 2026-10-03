@@ -65,6 +65,7 @@ jobs:
           REF: ${{ (github.ref_type == 'tag' && github.ref_name) || (github.event_name == 'workflow_dispatch' && inputs.version) || '' }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: ${{ steps.check.outputs.ref && 'dunglas/frankenphp' || github.repository }}
           ref: ${{ steps.check.outputs.ref }}
           persist-credentials: false
       - name: Set up Docker Buildx
@@ -112,6 +113,7 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: ${{ needs.prepare.outputs.ref && 'dunglas/frankenphp' || github.repository }}
           ref: ${{ needs.prepare.outputs.ref }}
           persist-credentials: false
       - name: Set up Docker Buildx
@@ -267,6 +269,7 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: ${{ needs.prepare.outputs.ref && 'dunglas/frankenphp' || github.repository }}
           ref: ${{ needs.prepare.outputs.ref }}
           persist-credentials: false
       - name: Set VERSION
@@ -451,6 +454,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          repository: ${{ needs.prepare.outputs.ref && 'dunglas/frankenphp' || github.repository }}
           ref: ${{ needs.prepare.outputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/setup-go

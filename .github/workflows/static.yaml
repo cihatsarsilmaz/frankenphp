@@ -44,7 +44,7 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     outputs:
-      push: ${{ toJson((steps.check.outputs.ref || (github.event_name == 'workflow_dispatch' && inputs.version) || startsWith(github.ref, 'refs/tags/') || (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')) && true || false) }}
+      push: ${{ steps.matrix.outputs.push }}
       platforms: ${{ steps.matrix.outputs.platforms }}
       metadata: ${{ steps.matrix.outputs.metadata }}
       gnu_metadata: ${{ steps.matrix.outputs.gnu_metadata }}
@@ -79,10 +79,17 @@ jobs:
             echo metadata="${METADATA}"
             echo platforms="$(jq -c 'first(.target[]) | .platforms' <<< "${METADATA}")"
             echo gnu_metadata="${GNU_METADATA}"
+            if [[ "${PUSH_REQUESTED}" == "true" && "${DOCKERHUB_CREDENTIALS_AVAILABLE}" == "true" ]]; then
+              echo "push=true"
+            else
+              echo "push=false"
+            fi
           } >> "${GITHUB_OUTPUT}"
         env:
           SHA: ${{ github.sha }}
           VERSION: ${{ steps.check.outputs.ref || 'dev' }}
+          PUSH_REQUESTED: ${{ toJson((steps.check.outputs.ref || (github.event_name == 'workflow_dispatch' && inputs.version) || startsWith(github.ref, 'refs/tags/') || (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')) && true || false) }}
+          DOCKERHUB_CREDENTIALS_AVAILABLE: ${{ vars.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
 
   build-linux-musl:
     permissions:
@@ -125,7 +132,7 @@ jobs:
           platforms: ${{ matrix.platform }}
       - name: Login to DockerHub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: fromJson(needs.prepare.outputs.push)
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }} # zizmor: ignore[secrets-outside-env] TODO: drop once super-linter ships zizmor >=1.24.0, then the allowlist in zizmor.yaml takes over
